@@ -1,186 +1,143 @@
 import streamlit as st
 import pandas as pd
-import streamlit.components.v1 as components
+import folium
+from streamlit_folium import st_folium
+from streamlit_js_eval import get_geolocation
 
-# Configuração da página para celular
-st.set_page_config(page_title="Localizador GPS Renault", layout="wide")
+# Configuração da página otimizada para celulares
+st.set_page_config(
+    page_title="Radar LTS - Renault",
+    page_icon="🎯",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-st.title("🛰️ Radar de Equipamentos TI (GPS Real)")
+# Estilo CSS para ajustar a exibição em telas de celular
+st.markdown("""
+    <style>
+        .block-container { padding-top: 1rem; padding-bottom: 0rem; }
+        h1 { font-size: 1.8rem !important; text-align: center; }
+    </style>
+""", unsafe_allow_html=True)
 
-NOME_ARQUIVO = "equipamentos.xlsx"
+st.title("🎯 Radar de Localização de LTS")
 
-# 1. Carregar a planilha Excel
-def carregar_dados():
+# ---------------------------------------------------------
+# 1. CARREGAMENTO E TRATAMENTO DA PLANILHA EXCEL
+# ---------------------------------------------------------
+EXCEL_PATH = r"C:\Users\pm29058\OneDrive - Renault\PSF Brazil - PSF\Nova pasta\Python\local_LTS\Local_lts_exempl.xlsx"
+
+def converter_coordenada(valor):
+    """Converte valores de latitude/longitude para float com segurança."""
+    if pd.isna(valor):
+        return None
+    val_str = str(valor).strip().replace(',', '.')
     try:
-        df = pd.read_excel(NOME_ARQUIVO)
-        df['Latitude'] = pd.to_numeric(df['Latitude'], errors='coerce')
-        df['Longitude'] = pd.to_numeric(df['Longitude'], errors='coerce')
-        return df.dropna(subset=['Latitude', 'Longitude'])
-    except Exception as e:
-        st.error(f"Erro ao ler o Excel: {e}")
-        return pd.DataFrame()
+        return float(val_str)
+    except ValueError:
+        return None
 
-df = carregar_dados()
+# Garante que a variável df_lts sempre exista
+df_lts = pd.DataFrame()
 
-if not df.empty:
-    # --- ÁREA ADMINISTRATIVA (Senha: batata) ---
-    st.sidebar.header("🔒 Área Administrativa")
-    senha = st.sidebar.text_input("Senha para editar:", type="password")
-    if senha == "batata":
-        st.sidebar.success("Acesso liberado!")
-        lista_equipamentos = df['Equipamento'].astype(str).tolist()
-        equipamento_selecionado = st.sidebar.selectbox("Escolha o item:", lista_equipamentos)
-        dados_atuais = df[df['Equipamento'].astype(str) == equipamento_selecionado].iloc[0]
-        
-        novo_nome = st.sidebar.text_input("Nome:", value=str(dados_atuais['Equipamento']))
-        novo_tipo = st.sidebar.text_input("Tipo:", value=str(dados_atuais['Tipo']))
-        nova_lat = st.sidebar.number_input("Lat:", value=float(dados_atuais['Latitude']), format="%.6f")
-        nova_lon = st.sidebar.number_input("Lon:", value=float(dados_atuais['Longitude']), format="%.6f")
-        
-        if st.sidebar.button("💾 Salvar"):
-            idx = df[df['Equipamento'].astype(str) == equipamento_selecionado].index[0]
-            df.at[idx, 'Equipamento'] = novo_nome
-            df.at[idx, 'Tipo'] = novo_tipo
-            df.at[idx, 'Latitude'] = nova_lat
-            df.at[idx, 'Longitude'] = nova_lon
-            df.to_excel(NOME_ARQUIVO, index=False)
-            st.rerun()
+try:
+    df_lts = pd.read_excel(EXCEL_PATH)
+    # Padroniza nomes das colunas limpando espaços extras
+    df_lts.columns = [str(col).strip().upper() for col in df_lts.columns]
+    st.caption(f"✓ Planilha sincronizada ({len(df_lts)} registros)")
+except Exception as e:
+    st.error(f"❌ Erro ao acessar a planilha no OneDrive: {e}")
+    st.info("Verifique se o arquivo Excel está fechado e sincronizado no computador.")
+    st.stop()
 
-    # 2. Barra de busca para filtrar no Radar
-    busca = st.text_input("🔍 Filtrar Equipamento no Radar:", "")
-    if busca:
-        df_filtrado = df[df['Equipamento'].astype(str).str.contains(busca, case=False) | df['Tipo'].astype(str).str.contains(busca, case=False)]
-    else:
-        df_filtrado = df
+# ---------------------------------------------------------
+# 2. OBTENÇÃO DA GEOLOCALIZAÇÃO (GPS DO CELULAR)
+# ---------------------------------------------------------
+loc = get_geolocation()
 
-    # 3. Converter dados do Excel para passar para o mapa em JavaScript
-    dados_equipamentos = df_filtrado[['Equipamento', 'Tipo', 'Latitude', 'Longitude']].to_dict(orient='records')
+user_lat, user_lon = None, None
 
-    # --- INJEÇÃO DO MAPA DE RADAR COM GPS EM TEMPO REAL ---
-    html_radar = f"""
-    <div id="status" style="font-family: sans-serif; font-size:14px; color:#555; margin-bottom:10px;">📡 Aguardando sinal do GPS do celular...</div>
+if loc and isinstance(loc, dict) and 'coords' in loc:
+    user_lat = loc['coords']['latitude']
+    user_lon = loc['coords']['longitude']
+    st.success(f"📍 GPS Ativo | Lat: {user_lat:.5f}, Lon: {user_lon:.5f}")
+else:
+    # Se o GPS ainda não carregou, usa a coordenada da 1ª LTS válida
+    if not df_lts.empty and 'LATITUDE' in df_lts.columns and 'LONGITUDE' in df_lts.columns:
+        df_validos = df_lts.dropna(subset=['LATITUDE', 'LONGITUDE'])
+        if not df_validos.empty:
+            user_lat = converter_coordenada(df_validos.iloc[0]['LATITUDE'])
+            user_lon = converter_coordenada(df_validos.iloc[0]['LONGITUDE'])
     
-    <div style="margin-bottom: 10px;">
-        <button onclick="mudarZoom(1.5)" style="padding: 8px 15px; font-size: 16px; font-weight: bold; margin-right: 5px; border-radius: 5px; border: 1px solid #ccc; background: white;">➕ Zoom</button>
-        <button onclick="mudarZoom(0.6)" style="padding: 8px 15px; font-size: 16px; font-weight: bold; border-radius: 5px; border: 1px solid #ccc; background: white;">➖ Menos Zoom</button>
-    </div>
+    # Caso padrão de fallback (Renault - São José dos Pinhais)
+    if user_lat is None or user_lon is None:
+        user_lat, user_lon = -25.53236, -49.11608
 
-    <canvas id="radarCanvas" style="border:1px solid #ccc; background:#f8f9fa; width:100%; height:450px; border-radius:10px;"></shadow>
+    st.warning("⚠️ Permissão de GPS aguardada... Exibindo posição de referência da fábrica.")
 
-    <script>
-        const equipamentos = {str(dados_equipamentos)};
-        const canvas = document.getElementById('radarCanvas');
-        const ctx = canvas.getContext('2d');
-        const statusDiv = document.getElementById('status');
+# ---------------------------------------------------------
+# 3. CRIAÇÃO DO MAPA / RADAR
+# ---------------------------------------------------------
+mapa = folium.Map(
+    location=[user_lat, user_lon],
+    zoom_start=19,
+    max_zoom=22,
+    tiles="OpenStreetMap"
+)
 
-        let ultimaLat = null;
-        let ultimaLon = null;
+# Posição do Operador (Marcador Vermelho)
+folium.Marker(
+    location=[user_lat, user_lon],
+    popup="<b>Sua Posição (Operador)</b>",
+    tooltip="Você está aqui",
+    icon=folium.Icon(color="red", icon="user", prefix="fa")
+).add_to(mapa)
 
-        // Escala aumentada e calibrada para metros reais dentro do pátio industrial
-        let escala = 450000; 
+# Raio do Radar ao redor do operador (50 metros)
+folium.Circle(
+    location=[user_lat, user_lon],
+    radius=50,
+    color="#d9534f",
+    fill=True,
+    fill_color="#d9534f",
+    fill_opacity=0.15
+).add_to(mapa)
 
-        function ajustarJanela() {{
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
-            if(ultimaLat !== null) desenharRadar(ultimaLat, ultimaLon);
-        }}
-        window.addEventListener('resize', ajustarJanela);
+# ---------------------------------------------------------
+# 4. INSERÇÃO DAS LTS NO MAPA
+# ---------------------------------------------------------
+if not df_lts.empty:
+    for idx, row in df_lts.iterrows():
+        lat = converter_coordenada(row.get('LATITUDE'))
+        lon = converter_coordenada(row.get('LONGITUDE'))
         
-        // Inicializa o tamanho
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
-
-        function mudarZoom(fator) {{
-            escala = escala * fator;
-            if(ultimaLat !== null) desenharRadar(ultimaLat, ultimaLon);
-        }}
-
-        function desenharRadar(userLat, userLon) {{
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if lat is None or lon is None:
+            continue
             
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            
-            // 1. Desenhar anéis concêntricos de distância de referência
-            ctx.strokeStyle = '#e2e8f0';
-            ctx.lineWidth = 1.5;
-            [60, 130, 200, 270].forEach(raio => {{
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, raio, 0, 2 * Math.PI);
-                ctx.stroke();
-            }});
+        nome = str(row.get('NOME', f'LTS #{idx+1}'))
+        coluna = str(row.get('COLUNA', 'Não informada'))
+        
+        popup_html = f"""
+        <div style="font-family: Arial, sans-serif; min-width: 150px; font-size: 14px;">
+            <h4 style="margin: 0 0 8px 0; color: #1a252f; border-bottom: 2px solid #0275d8; padding-bottom: 4px;">
+                {nome}
+            </h4>
+            <p style="margin: 4px 0;"><b>Coluna:</b> {coluna}</p>
+        </div>
+        """
+        
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=9,
+            color="#0275d8",
+            fill=True,
+            fill_color="#5bc0de",
+            fill_opacity=0.9,
+            popup=folium.Popup(popup_html, max_width=250),
+            tooltip=f"{nome} - Coluna: {coluna}"
+        ).add_to(mapa)
 
-            // 2. Desenhar os equipamentos do Excel ao redor do usuário
-            equipamentos.forEach(eq => {{
-                // Correção da projeção mercator local (graus para pixels com base no zoom do usuário)
-                const dx = (eq.Longitude - userLon) * escala * Math.cos(userLat * Math.PI / 180);
-                const dy = (userLat - eq.Latitude) * escala; 
-
-                const x = centerX + dx;
-                const y = centerY + dy;
-
-                // Margem de segurança para desenhar o ícone inteiro na borda
-                if (x >= 15 && x <= canvas.width - 15 && y >= 15 && y <= canvas.height - 15) {{
-                    const isImpressora = eq.Tipo.toLowerCase().includes('impressora');
-                    
-                    // Fundo circular do ícone
-                    ctx.beginPath();
-                    ctx.arc(x, y, 16, 0, 2 * Math.PI);
-                    ctx.fillStyle = isImpressora ? '#dbeafe' : '#dcfce7';
-                    ctx.strokeStyle = isImpressora ? '#2563eb' : '#16a34a';
-                    ctx.lineWidth = 2.5;
-                    ctx.fill();
-                    ctx.stroke();
-
-                    // Emoji correspondente
-                    ctx.font = "16px Arial";
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "middle";
-                    ctx.fillText(isImpressora ? "🖨️" : "💻", x, y);
-
-                    // Nome em caixa flutuante para facilitar leitura no sol/fábrica
-                    ctx.font = "bold 10px sans-serif";
-                    ctx.fillStyle = "#1e293b";
-                    
-                    // Sombra branca no texto para dar leitura fácil
-                    ctx.strokeStyle = "#ffffff";
-                    ctx.lineWidth = 3;
-                    ctx.strokeText(eq.Equipamento, x, y - 24);
-                    ctx.fillText(eq.Equipamento, x, y - 24);
-                }}
-            }});
-
-            // 3. Desenhar marcador do Usuário (Bolinha com efeito sonar azul)
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 9, 0, 2 * Math.PI);
-            ctx.fillStyle = '#2563eb';
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2.5;
-            ctx.fill();
-            ctx.stroke();
-        }}
-
-        if (navigator.geolocation) {{
-            navigator.geolocation.watchPosition(
-                (pos) => {{
-                    ultimaLat = pos.coords.latitude;
-                    ultimaLon = pos.coords.longitude;
-                    statusDiv.innerHTML = `🟢 <b>GPS Conectado</b> | Lat: <b>${{ultimaLat.toFixed(6)}}</b> | Lon: <b>${{ultimaLon.toFixed(6)}}</b>`;
-                    desenharRadar(ultimaLat, ultimaLon);
-                }},
-                (err) => {{
-                    statusDiv.innerHTML = "🔴 Erro: Por favor, ative a localização/GPS de alta precisão nas configurações do celular.";
-                }},
-                {{ enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }}
-            );
-        }} else {{
-            statusDiv.innerHTML = "❌ Navegador incompatível com GPS.";
-        }}
-    </script>
-    """
-    
-    components.html(html_radar, height=520)
-
-    # Tabela de conferência
-    st.subheader(f"Lista de Equipamentos ({len(df_filtrado)})")
-    st.dataframe(df_filtrado[['Equipamento', 'Tipo', 'Latitude', 'Longitude']], width="stretch")
+# ---------------------------------------------------------
+# 5. EXIBIÇÃO NO STREAMLIT
+# ---------------------------------------------------------
+st_folium(mapa, width="100%", height=550)
