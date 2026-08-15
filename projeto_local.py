@@ -4,6 +4,7 @@ import folium
 from streamlit_folium import st_folium
 from streamlit_js_eval import get_geolocation
 import os
+import time
 
 # Configuração da página para navegação móvel
 st.set_page_config(
@@ -24,6 +25,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Radar de Localização de LTS")
+
+# Controle de estado para forçar a atualização do GPS pelo botão
+if "gps_key" not in st.session_state:
+    st.session_state["gps_key"] = str(time.time())
 
 # ---------------------------------------------------------
 # 1. CARREGAMENTO E TRATAMENTO DA PLANILHA EXCEL
@@ -52,9 +57,10 @@ except Exception as e:
     st.stop()
 
 # ---------------------------------------------------------
-# 2. CAPTURA DE GEOLOCALIZAÇÃO DO CELULAR (GPS)
+# 2. CAPTURA DE GEOLOCALIZAÇÃO DO CELULAR (GPS ATUALIZÁVEL)
 # ---------------------------------------------------------
-loc = get_geolocation()
+# Passa a chave dinâmica em 'component_key' para forçar o recarregamento do GPS
+loc = get_geolocation(component_key=st.session_state["gps_key"])
 
 user_lat, user_lon = None, None
 
@@ -102,8 +108,9 @@ with col_busca:
                 lts_selecionada = lts_dados
 
 with col_btn:
-    # Botão para recarregar a localização do GPS e a página
     if st.button("🔄 Atualizar"):
+        # Altera a chave para obrigar o navegador do celular a consultar o GPS novamente
+        st.session_state["gps_key"] = str(time.time())
         st.rerun()
 
 # ---------------------------------------------------------
@@ -116,7 +123,7 @@ mapa = folium.Map(
     tiles="OpenStreetMap"
 )
 
-# Marcador Vermelho: Posição do Operador/Celular
+# Marcador Vermelho: Posição do Operador
 folium.Marker(
     location=[user_lat, user_lon],
     popup="<b>Sua Posição (Operador)</b>",
@@ -124,7 +131,7 @@ folium.Marker(
     icon=folium.Icon(color="red", icon="user", prefix="fa")
 ).add_to(mapa)
 
-# Círculo do radar ajustado para 15 metros de raio
+# Círculo do radar (15 metros)
 folium.Circle(
     location=[user_lat, user_lon],
     radius=15,
@@ -135,7 +142,7 @@ folium.Circle(
 ).add_to(mapa)
 
 # ---------------------------------------------------------
-# 5. PLOTAGEM DAS LTS NO MAPA
+# 5. PLOTAGEM DAS LTS COM IMAGEM NO POP-UP
 # ---------------------------------------------------------
 if not df_lts.empty:
     for idx, row in df_lts.iterrows():
@@ -148,17 +155,28 @@ if not df_lts.empty:
         nome = str(row.get('NOME', f'LTS #{idx+1}'))
         coluna = str(row.get('COLUNA', 'Não informada'))
         
+        link_img = row.get('LINK IMG')
+        img_html = ""
+        if pd.notna(link_img) and str(link_img).strip().startswith("http"):
+            url_img = str(link_img).strip()
+            img_html = f"""
+            <div style="text-align: center; margin-top: 8px;">
+                <img src="{url_img}" style="width: 100%; max-width: 180px; height: auto; border-radius: 6px; border: 1px solid #ccc;">
+            </div>
+            """
+
         eh_selecionada = (lts_selecionada is not None) and (row['BUSCA_LABEL'] == lts_selecionada['BUSCA_LABEL'])
         cor_borda = "#28a745" if eh_selecionada else "#0275d8"
         cor_preenchimento = "#5cb85c" if eh_selecionada else "#5bc0de"
         raio_marker = 14 if eh_selecionada else 9
         
         popup_html = f"""
-        <div style="font-family: Arial, sans-serif; min-width: 160px; font-size: 14px; padding: 2px;">
+        <div style="font-family: Arial, sans-serif; min-width: 180px; max-width: 220px; font-size: 14px; padding: 2px;">
             <h4 style="margin: 0 0 6px 0; color: #1a252f; border-bottom: 2px solid {cor_borda}; padding-bottom: 4px;">
                 {nome}
             </h4>
             <p style="margin: 4px 0; color: #333;"><b>Coluna:</b> {coluna}</p>
+            {img_html}
         </div>
         """
         
