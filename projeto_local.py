@@ -140,7 +140,7 @@ folium.Circle(
 ).add_to(mapa)
 
 # ---------------------------------------------------------
-# 5. PLOTAGEM DAS LTS COM CORES POR TIPO ("T" OU "A")
+# 5. PLOTAGEM DAS LTS COM CORES POR TIPO ("T", "T2", "A")
 # ---------------------------------------------------------
 if not df_lts.empty:
     for idx, row in df_lts.iterrows():
@@ -158,9 +158,12 @@ if not df_lts.empty:
         if tipo == 'A':
             cor_borda = "#d39e00"        # Amarelo / Dourado
             cor_preenchimento = "#ffc107" # Amarelo vibrante
+        elif tipo == 'T2':
+            cor_borda = "#002752"        # Borda Azul bem escuro
+            cor_preenchimento = "#004085" # Azul Escuro
         else:
             cor_borda = "#0275d8"        # Azul Padrão (T)
-            cor_preenchimento = "#5bc0de" # Azul claro
+            cor_preenchimento = "#5bc0de" # Azul Claro
 
         # Se for a LTS selecionada na busca, destaca em VERDE
         eh_selecionada = (lts_selecionada is not None) and (row['BUSCA_LABEL'] == lts_selecionada['BUSCA_LABEL'])
