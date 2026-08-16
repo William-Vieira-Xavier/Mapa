@@ -91,7 +91,7 @@ zoom_inicial = 19
 with col_busca:
     if not df_lts.empty:
         df_lts['BUSCA_LABEL'] = df_lts.apply(
-            lambda r: f"{r.get('NOME', 'Sem Nome')} (Coluna: {r.get('COLUNA', 'N/A')})", axis=1
+            lambda r: f"{r.get('NOME', 'Sem Nome')} (Tipo: {r.get('TIPO', 'N/A')} - Coluna: {r.get('COLUNA', 'N/A')})", axis=1
         )
         opcoes_busca = ["-- Digite ou escolha uma LTS para focar --"] + list(df_lts['BUSCA_LABEL'])
         escolha = st.selectbox("🔍 Buscar LTS:", opcoes_busca, label_visibility="collapsed")
@@ -140,7 +140,7 @@ folium.Circle(
 ).add_to(mapa)
 
 # ---------------------------------------------------------
-# 5. PLOTAGEM DAS LTS COM IMAGEM NO POP-UP (OTIMIZADO PARA CELULAR)
+# 5. PLOTAGEM DAS LTS COM CORES POR TIPO ("T" OU "A")
 # ---------------------------------------------------------
 if not df_lts.empty:
     for idx, row in df_lts.iterrows():
@@ -152,8 +152,25 @@ if not df_lts.empty:
             
         nome = str(row.get('NOME', f'LTS #{idx+1}'))
         coluna = str(row.get('COLUNA', 'Não informada'))
+        tipo = str(row.get('TIPO', 'N/A')).strip().upper()
         
-        # Tratamento da imagem da coluna "LINK IMG"
+        # Definição das cores por TIPO
+        if tipo == 'A':
+            cor_borda = "#d39e00"        # Amarelo / Dourado
+            cor_preenchimento = "#ffc107" # Amarelo vibrante
+        else:
+            cor_borda = "#0275d8"        # Azul Padrão (T)
+            cor_preenchimento = "#5bc0de" # Azul claro
+
+        # Se for a LTS selecionada na busca, destaca em VERDE
+        eh_selecionada = (lts_selecionada is not None) and (row['BUSCA_LABEL'] == lts_selecionada['BUSCA_LABEL'])
+        if eh_selecionada:
+            cor_borda = "#28a745"
+            cor_preenchimento = "#5cb85c"
+            
+        raio_marker = 14 if eh_selecionada else 9
+        
+        # Tratamento da imagem
         link_img = row.get('LINK IMG')
         img_html = ""
         
@@ -178,16 +195,12 @@ if not df_lts.empty:
             else:
                 img_html = "<br><span style='font-size:11px; color:red;'>⚠️ Link precisa iniciar com http/https</span>"
 
-        eh_selecionada = (lts_selecionada is not None) and (row['BUSCA_LABEL'] == lts_selecionada['BUSCA_LABEL'])
-        cor_borda = "#28a745" if eh_selecionada else "#0275d8"
-        cor_preenchimento = "#5cb85c" if eh_selecionada else "#5bc0de"
-        raio_marker = 14 if eh_selecionada else 9
-        
         popup_html = f"""
         <div style="font-family: Arial, sans-serif; min-width: 180px; max-width: 220px; font-size: 14px; padding: 2px;">
             <h4 style="margin: 0 0 6px 0; color: #1a252f; border-bottom: 2px solid {cor_borda}; padding-bottom: 4px;">
                 {nome}
             </h4>
+            <p style="margin: 4px 0; color: #333;"><b>Tipo:</b> {tipo}</p>
             <p style="margin: 4px 0; color: #333;"><b>Coluna:</b> {coluna}</p>
             {img_html}
         </div>
@@ -203,7 +216,7 @@ if not df_lts.empty:
             fill_color=cor_preenchimento,
             fill_opacity=0.9,
             popup=popup_obj,
-            tooltip=f"{nome} | Coluna: {coluna}"
+            tooltip=f"{nome} | Tipo: {tipo} | Coluna: {coluna}"
         ).add_to(mapa)
 
 # ---------------------------------------------------------
