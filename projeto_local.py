@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# ESTILIZAÇÃO CSS CUSTOMIZADA (FORÇADO TEMA ESCURO)
+# ESTILIZAÇÃO CSS CUSTOMIZADA (TEMA ESCURO PADRÃO)
 # ---------------------------------------------------------
 st.markdown("""
     <style>
@@ -37,7 +37,7 @@ st.markdown("""
             padding-right: 0.8rem;
         }
 
-        /* Top Banner Moderno / Minimalista */
+        /* Top Banner Moderno */
         .main-header {
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             padding: 16px 20px;
@@ -51,7 +51,6 @@ st.markdown("""
             overflow: hidden;
         }
         
-        /* Borda decorativa superior */
         .main-header::before {
             content: '';
             position: absolute;
@@ -107,7 +106,7 @@ st.markdown("""
             margin-bottom: 20px;
         }
 
-        /* Estilização de Inputs e Selectbox para Modo Escuro */
+        /* Estilização de Inputs e Selectbox */
         div[data-baseweb="select"] > div, input {
             background-color: #1e293b !important;
             color: #f8fafc !important;
@@ -175,7 +174,15 @@ st.markdown("""
             color: white;
         }
 
-        .stSelectbox label { display: none; }
+        /* Estilo para labels dos seletores */
+        .search-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -254,6 +261,8 @@ except Exception as e:
     st.info("Copie o arquivo 'Local_lts_exempl.xlsx' para dentro da MESMA PASTA onde está este arquivo 'principal.py'.")
     st.stop()
 
+colunas_switches = [col for col in df_lts.columns if 'SWITCH' in col]
+
 # ---------------------------------------------------------
 # 2. CAPTURA DE GEOLOCALIZAÇÃO DO CELULAR
 # ---------------------------------------------------------
@@ -277,37 +286,74 @@ if not df_lts.empty and 'LATITUDE' in df_lts.columns and 'LONGITUDE' in df_lts.c
         lon_referencia = converter_coordenada(df_validos.iloc[0]['LONGITUDE']) or lon_referencia
 
 # ---------------------------------------------------------
-# 3. CONTROLES DE BUSCA E NAVEGAÇÃO
+# 3. CONTROLES DE BUSCA SEPARADOS (LTS E SWITCH IP)
 # ---------------------------------------------------------
-col_busca, col_btn = st.columns([3, 1])
+col_busca_lts, col_busca_sw, col_btn = st.columns([2, 2, 1])
 
 lts_selecionada = None
 foco_lat = user_lat if user_lat is not None else lat_referencia
 foco_lon = user_lon if user_lon is not None else lon_referencia
 zoom_inicial = 19
 
-with col_busca:
-    if not df_lts.empty:
-        df_lts['BUSCA_LABEL'] = df_lts.apply(
-            lambda r: f"{r.get('NOME', 'Sem Nome')} (Tipo: {r.get('TIPO', 'N/A')} - Coluna: {r.get('COLUNA', 'N/A')})", axis=1
-        )
-        opcoes_busca = ["Digite ou selecione uma LTS para focar..."] + list(df_lts['BUSCA_LABEL'])
-        escolha = st.selectbox("Buscar LTS:", opcoes_busca, label_visibility="collapsed")
-        
-        if escolha != "Digite ou selecione uma LTS para focar...":
-            lts_dados = df_lts[df_lts['BUSCA_LABEL'] == escolha].iloc[0]
-            lat_temp = converter_coordenada(lts_dados.get('LATITUDE'))
-            lon_temp = converter_coordenada(lts_dados.get('LONGITUDE'))
-            
-            if lat_temp and lon_temp:
-                foco_lat, foco_lon = lat_temp, lon_temp
-                zoom_inicial = 21
-                lts_selecionada = lts_dados
+# Monta dicionários de mapeamento para cada busca
+mapa_lts = {}
+mapa_switches = {}
+
+if not df_lts.empty:
+    for idx, r in df_lts.iterrows():
+        nome_lts = r.get('NOME', 'Sem Nome')
+        tipo_lts = r.get('TIPO', 'N/A')
+        col_lts = r.get('COLUNA', 'N/A')
+
+        # Dicionário da busca de LTS
+        label_lts = f"{nome_lts} (Tipo: {tipo_lts} - Coluna: {col_lts})"
+        mapa_lts[label_lts] = r
+
+        # Dicionário da busca de Switches IP
+        for col_sw in colunas_switches:
+            val_sw = r.get(col_sw)
+            if pd.notna(val_sw) and str(val_sw).strip():
+                nome_sw = col_sw.replace(" - IP", "").replace("_", " ")
+                ip_sw = str(val_sw).strip()
+                label_sw = f"{ip_sw} ({nome_sw} - {nome_lts})"
+                mapa_switches[label_sw] = r
+
+# Selectbox 1: Buscar por LTS
+with col_busca_lts:
+    st.markdown('<div class="search-label">📍 Buscar por LTS / Coluna</div>', unsafe_allow_html=True)
+    opcoes_lts = ["Selecione uma LTS..."] + list(mapa_lts.keys())
+    escolha_lts = st.selectbox("Buscar por LTS:", opcoes_lts, key="busca_lts", label_visibility="collapsed")
+
+# Selectbox 2: Buscar por IP do Switch
+with col_busca_sw:
+    st.markdown('<div class="search-label">🔌 Buscar por IP do Switch</div>', unsafe_allow_html=True)
+    opcoes_sw = ["Selecione o IP do Switch..."] + list(mapa_switches.keys())
+    escolha_sw = st.selectbox("Buscar por IP:", opcoes_sw, key="busca_sw", label_visibility="collapsed")
 
 with col_btn:
+    st.markdown('<div class="search-label">&nbsp;</div>', unsafe_allow_html=True)
     if st.button("Atualizar GPS"):
         st.session_state["gps_key"] = str(time.time())
         st.rerun()
+
+# Lógica de prioridade de foco do mapa
+if escolha_lts != "Selecione uma LTS...":
+    lts_dados = mapa_lts[escolha_lts]
+    lat_temp = converter_coordenada(lts_dados.get('LATITUDE'))
+    lon_temp = converter_coordenada(lts_dados.get('LONGITUDE'))
+    if lat_temp and lon_temp:
+        foco_lat, foco_lon = lat_temp, lon_temp
+        zoom_inicial = 21
+        lts_selecionada = lts_dados
+
+elif escolha_sw != "Selecione o IP do Switch...":
+    lts_dados = mapa_switches[escolha_sw]
+    lat_temp = converter_coordenada(lts_dados.get('LATITUDE'))
+    lon_temp = converter_coordenada(lts_dados.get('LONGITUDE'))
+    if lat_temp and lon_temp:
+        foco_lat, foco_lon = lat_temp, lon_temp
+        zoom_inicial = 21
+        lts_selecionada = lts_dados
 
 # ---------------------------------------------------------
 # 4. LEGENDA EXPLICATIVA DAS CORES (ACIMA DO MAPA)
@@ -342,7 +388,6 @@ mapa = folium.Map(
     tiles="OpenStreetMap"
 )
 
-# SÓ ADICIONA O MARCADOR E O CÍRCULO SE A LOCALIZAÇÃO REAL FOR OBTIDA
 if user_lat is not None and user_lon is not None:
     folium.Marker(
         location=[user_lat, user_lon],
@@ -375,59 +420,94 @@ if not df_lts.empty:
         coluna = str(row.get('COLUNA', 'N/I'))
         tipo = str(row.get('TIPO', 'N/A')).strip().upper()
         
-        # Cores por TIPO
         if tipo == 'A':
-            cor_borda = "#b45309"        # LTS AÉREO
+            cor_borda = "#b45309"
             cor_preenchimento = "#f59e0b"
+            nome_tipo = "AÉREO"
         elif tipo == 'T2':
-            cor_borda = "#1e3a8a"        # LTS 2°ANDAR
+            cor_borda = "#1e3a8a"
             cor_preenchimento = "#1d4ed8"
+            nome_tipo = "2° ANDAR"
         else:
-            cor_borda = "#0369a1"        # LTS TERREO
+            cor_borda = "#0369a1"
             cor_preenchimento = "#38bdf8"
+            nome_tipo = "TÉRREO"
 
-        # Se selecionada na busca, destaca em VERDE
-        eh_selecionada = (lts_selecionada is not None) and (row['BUSCA_LABEL'] == lts_selecionada['BUSCA_LABEL'])
+        eh_selecionada = (lts_selecionada is not None) and (row.get('NOME') == lts_selecionada.get('NOME')) and (row.get('COLUNA') == lts_selecionada.get('COLUNA'))
         if eh_selecionada:
             cor_borda = "#15803d"
             cor_preenchimento = "#22c55e"
             
         raio_marker = 14 if eh_selecionada else 9
         
-        # Popup Imagem
+        switches_encontrados = []
+        for col_sw in colunas_switches:
+            val_sw = row.get(col_sw)
+            if pd.notna(val_sw) and str(val_sw).strip():
+                nome_limpo = col_sw.replace(" - IP", "").replace("_", " ")
+                switches_encontrados.append(f"""
+                    <div style="background: #1e293b; border: 1px solid #334155; border-left: 3px solid {cor_preenchimento}; padding: 3px 6px; border-radius: 4px; margin-bottom: 3px;">
+                        <span style="color: #94a3b8; font-size: 9px; font-weight: bold; display: block; text-transform: uppercase;">{nome_limpo}</span>
+                        <code style="color: #38bdf8; font-size: 10px; font-weight: bold; font-family: monospace;">{str(val_sw).strip()}</code>
+                    </div>
+                """)
+
+        if switches_encontrados:
+            switches_html = f"""
+            <div style="margin-top: 6px;">
+                <span style="color: #64748b; font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Switches Configurados:</span>
+                <div style="margin-top: 3px; max-height: 90px; overflow-y: auto;">
+                    {"".join(switches_encontrados)}
+                </div>
+            </div>
+            """
+        else:
+            switches_html = """
+            <div style="margin-top: 6px; color: #94a3b8; font-size: 10px; font-style: italic;">
+                Nenhum switch cadastrado.
+            </div>
+            """
+
+        # FOTO DA LTS
         link_img = row.get('LINK IMG')
         img_html = ""
-        
         if pd.notna(link_img) and str(link_img).strip():
             url_img = str(link_img).strip()
             if url_img.startswith("http"):
                 img_html = f"""
-                <div style="text-align: center; margin-top: 8px;">
-                    <a href="{url_img}" target="_blank">
+                <div style="text-align: center; margin-top: 6px; border-top: 1px solid #e2e8f0; padding-top: 4px;">
+                    <a href="{url_img}" target="_blank" title="Clique para expandir a imagem">
                         <img src="{url_img}" 
                              alt="Foto da {nome}" 
-                             style="width: 100%; max-width: 180px; height: auto; border-radius: 8px; border: 1px solid #cbd5e1;"
-                             onerror="this.onerror=null; this.src='https://via.placeholder.com/180x120?text=Sem+Imagem';">
-                    </a>
-                    <br>
-                    <a href="{url_img}" target="_blank" style="font-size: 11px; color: #0284c7; text-decoration: none; font-weight: bold;">
-                        Expandir foto
+                             style="width: 100px; height: 65px; object-fit: cover; border-radius: 4px; border: 1px solid #cbd5e1; cursor: pointer;"
+                             onerror="this.onerror=null; this.src='https://via.placeholder.com/100x65?text=Sem+Foto';">
                     </a>
                 </div>
                 """
 
+        # POPUP COMPACTO
         popup_html = f"""
-        <div style="font-family: Arial, sans-serif; min-width: 180px; max-width: 220px; padding: 2px;">
-            <h4 style="margin: 0 0 6px 0; color: #0f172a; border-bottom: 2px solid {cor_borda}; padding-bottom: 4px;">
+        <div style="font-family: 'Inter', Arial, sans-serif; width: 180px; max-height: 220px; padding: 0px; overflow-x: hidden;">
+            <h3 style="margin: 0 0 4px 0; color: #0f172a; font-size: 13px; font-weight: 800; text-transform: uppercase; border-bottom: 2px solid {cor_preenchimento}; padding-bottom: 2px;">
                 {nome}
-            </h4>
-            <p style="margin: 4px 0; color: #334155; font-size: 13px;"><b>Tipo:</b> {tipo}</p>
-            <p style="margin: 4px 0; color: #334155; font-size: 13px;"><b>Coluna:</b> {coluna}</p>
+            </h3>
+
+            <div style="background: #f1f5f9; padding: 4px 6px; border-radius: 5px; margin-bottom: 4px; border-left: 3px solid {cor_preenchimento};">
+                <div style="color: #64748b; font-size: 9px; font-weight: 700; text-transform: uppercase;">Localização / Coluna</div>
+                <div style="color: #0f172a; font-size: 12px; font-weight: 800;">{coluna}</div>
+                <div style="margin-top: 1px;">
+                    <span style="background: {cor_preenchimento}; color: #ffffff; font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 8px; text-transform: uppercase;">
+                        {nome_tipo}
+                    </span>
+                </div>
+            </div>
+
+            {switches_html}
             {img_html}
         </div>
         """
         
-        popup_obj = folium.Popup(popup_html, max_width=250, show=eh_selecionada)
+        popup_obj = folium.Popup(popup_html, max_width=200, show=eh_selecionada)
         
         folium.CircleMarker(
             location=[lat, lon],
@@ -437,10 +517,10 @@ if not df_lts.empty:
             fill_color=cor_preenchimento,
             fill_opacity=0.9,
             popup=popup_obj,
-            tooltip=f"{nome} | Tipo: {tipo} | Col: {coluna}"
+            tooltip=f"{nome} | Coluna: {coluna}"
         ).add_to(mapa)
 
 # ---------------------------------------------------------
-# 7. RENDERIZAÇÃO DO MAPA (ALTURA 350px)
+# 7. RENDERIZAÇÃO DO MAPA
 # ---------------------------------------------------------
 st_folium(mapa, width="100%", height=350)
