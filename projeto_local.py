@@ -7,7 +7,7 @@ import os
 import time
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DA PÁGINA (SEM EMOJI)
+# CONFIGURAÇÃO DA PÁGINA
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="Radar LTS - Renault",
@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# ESTILIZAÇÃO CSS CUSTOMIZADA (DESIGN MODERNO & CORPORATIVO)
+# ESTILIZAÇÃO CSS CUSTOMIZADA (FORÇADO TEMA ESCURO)
 # ---------------------------------------------------------
 st.markdown("""
     <style>
@@ -24,8 +24,14 @@ st.markdown("""
         
         * { font-family: 'Inter', sans-serif; }
 
+        /* Força fundo escuro geral e texto claro */
+        .stApp {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+        }
+
         .block-container {
-            padding-top: 1.2rem;
+            padding-top: 1rem;
             padding-bottom: 1rem;
             padding-left: 0.8rem;
             padding-right: 0.8rem;
@@ -34,11 +40,11 @@ st.markdown("""
         /* Top Banner Moderno / Minimalista */
         .main-header {
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            padding: 22px 24px;
-            border-radius: 14px;
+            padding: 16px 20px;
+            border-radius: 12px;
             color: #f8fafc;
             text-align: center;
-            margin-bottom: 18px;
+            margin-bottom: 14px;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
             border: 1px solid #334155;
             position: relative;
@@ -57,7 +63,7 @@ st.markdown("""
         }
 
         .main-header h1 {
-            font-size: 1.6rem !important;
+            font-size: 1.4rem !important;
             font-weight: 800 !important;
             margin: 0 !important;
             color: #ffffff !important;
@@ -67,32 +73,67 @@ st.markdown("""
 
         .main-header .sub-badge {
             display: inline-block;
-            margin-top: 8px;
-            padding: 4px 12px;
+            margin-top: 6px;
+            padding: 3px 10px;
             background: rgba(56, 189, 248, 0.1);
             border: 1px solid rgba(56, 189, 248, 0.3);
             border-radius: 20px;
             color: #38bdf8;
-            font-size: 0.78rem;
+            font-size: 0.75rem;
             font-weight: 600;
             letter-spacing: 0.3px;
         }
 
-        /* Legenda Estilizada */
+        /* Card de Login */
+        .login-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 14px;
+            padding: 24px;
+            max-width: 420px;
+            margin: 40px auto;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+            text-align: center;
+        }
+        .login-card h3 {
+            color: #f8fafc;
+            margin-top: 0;
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+        .login-card p {
+            color: #94a3b8;
+            font-size: 0.85rem;
+            margin-bottom: 20px;
+        }
+
+        /* Estilização de Inputs e Selectbox para Modo Escuro */
+        div[data-baseweb="select"] > div, input {
+            background-color: #1e293b !important;
+            color: #f8fafc !important;
+            border-color: #334155 !important;
+        }
+        
+        div[data-baseweb="popover"] div {
+            background-color: #1e293b !important;
+            color: #f8fafc !important;
+        }
+
+        /* Legenda Estilizada Compacta */
         .legend-box {
             background: #1e293b;
             border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 14px 18px;
-            margin-top: 12px;
+            border-radius: 10px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
         .legend-title {
             font-weight: 700;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             color: #f8fafc;
             text-align: center;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -100,28 +141,28 @@ st.markdown("""
             display: flex;
             flex-wrap: wrap;
             justify-content: space-around;
-            gap: 12px;
-            font-size: 0.85rem;
+            gap: 8px;
+            font-size: 0.8rem;
             color: #cbd5e1;
         }
         .legend-item {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             font-weight: 600;
         }
         .dot {
-            height: 14px;
-            width: 14px;
+            height: 12px;
+            width: 12px;
             border-radius: 50%;
             display: inline-block;
-            box-shadow: 0 0 8px rgba(0,0,0,0.3);
+            box-shadow: 0 0 6px rgba(0,0,0,0.3);
         }
 
         div.stButton > button {
             width: 100%;
             border-radius: 8px;
-            height: 2.8em;
+            height: 2.6em;
             font-weight: 600;
             background-color: #0284c7;
             color: white;
@@ -139,12 +180,49 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# CABEÇALHO PRINCIPAL
+# AUTENTICAÇÃO / TELA DE SENHA
+# ---------------------------------------------------------
+SENHA_CORRETA = "batata"
+
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+
+if not st.session_state["autenticado"]:
+    st.markdown("""
+        <div class="main-header">
+            <h1>RADAR DE LOCALIZAÇÃO LTS</h1>
+            <div class="sub-badge">RENAULT &nbsp;|&nbsp; ACESSO RESTRITO</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    col_esq, col_centro, col_dir = st.columns([1, 2, 1])
+    with col_centro:
+        st.markdown("""
+            <div class="login-card">
+                <h3>Acesso ao Sistema</h3>
+                <p>Informe a senha de credencial para continuar</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        senha_digitada = st.text_input("Senha:", type="password", placeholder="Digite a senha de acesso...", label_visibility="collapsed")
+        btn_entrar = st.button("Entrar no Sistema")
+        
+        if btn_entrar:
+            if senha_digitada == SENHA_CORRETA:
+                st.session_state["autenticado"] = True
+                st.rerun()
+            else:
+                st.error("Senha incorreta! Tente novamente.")
+
+    st.stop()
+
+# ---------------------------------------------------------
+# CABEÇALHO PRINCIPAL (SISTEMA LIBERADO)
 # ---------------------------------------------------------
 st.markdown("""
     <div class="main-header">
         <h1>RADAR DE LOCALIZAÇÃO LTS</h1>
-        <div class="sub-badge">RENAULT &nbsp;|&nbsp; MONITORAMENTO Elaborado por: William Vieira</div>
+        <div class="sub-badge">RENAULT &nbsp;|&nbsp; MONITORAMENTO & NAVEGAÇÃO EM TEMPO REAL</div>
     </div>
 """, unsafe_allow_html=True)
 
@@ -188,7 +266,6 @@ if loc and isinstance(loc, dict) and 'coords' in loc:
     user_lon = loc['coords']['longitude']
     st.success(f"GPS Ativo | Posição: `{user_lat:.5f}, {user_lon:.5f}`")
 else:
-    # Sem localização em tempo real: permanece None (não desenhará a marcação do operador)
     st.warning("Permissão de GPS aguardada ou indisponível...")
 
 # Define centro padrão do mapa caso não haja GPS nem busca ativa
@@ -233,7 +310,30 @@ with col_btn:
         st.rerun()
 
 # ---------------------------------------------------------
-# 4. CRIAÇÃO DO MAPA E RADAR (FOLIUM)
+# 4. LEGENDA EXPLICATIVA DAS CORES (ACIMA DO MAPA)
+# ---------------------------------------------------------
+st.markdown("""
+<div class="legend-box">
+    <div class="legend-title">Legenda das LTS</div>
+    <div class="legend-items">
+        <div class="legend-item">
+            <span class="dot" style="background-color: #38bdf8; border: 2px solid #0369a1;"></span>
+            <span>TÉRREO</span>
+        </div>
+        <div class="legend-item">
+            <span class="dot" style="background-color: #1d4ed8; border: 2px solid #1e3a8a;"></span>
+            <span>2°ANDAR</span>
+        </div>
+        <div class="legend-item">
+            <span class="dot" style="background-color: #f59e0b; border: 2px solid #b45309;"></span>
+            <span>AÉREO</span>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# 5. CRIAÇÃO DO MAPA E RADAR (FOLIUM)
 # ---------------------------------------------------------
 mapa = folium.Map(
     location=[foco_lat, foco_lon],
@@ -244,7 +344,6 @@ mapa = folium.Map(
 
 # SÓ ADICIONA O MARCADOR E O CÍRCULO SE A LOCALIZAÇÃO REAL FOR OBTIDA
 if user_lat is not None and user_lon is not None:
-    # Marcador Vermelho: Operador
     folium.Marker(
         location=[user_lat, user_lon],
         popup="<b>Sua Posição (Operador)</b>",
@@ -252,7 +351,6 @@ if user_lat is not None and user_lon is not None:
         icon=folium.Icon(color="red", icon="user", prefix="fa")
     ).add_to(mapa)
 
-    # Círculo do radar (15 metros)
     folium.Circle(
         location=[user_lat, user_lon],
         radius=15,
@@ -263,7 +361,7 @@ if user_lat is not None and user_lon is not None:
     ).add_to(mapa)
 
 # ---------------------------------------------------------
-# 5. PLOTAGEM DAS LTS
+# 6. PLOTAGEM DAS LTS
 # ---------------------------------------------------------
 if not df_lts.empty:
     for idx, row in df_lts.iterrows():
@@ -343,29 +441,6 @@ if not df_lts.empty:
         ).add_to(mapa)
 
 # ---------------------------------------------------------
-# 6. RENDERIZAÇÃO DO MAPA
+# 7. RENDERIZAÇÃO DO MAPA (ALTURA 350px)
 # ---------------------------------------------------------
-st_folium(mapa, width="100%", height=480)
-
-# ---------------------------------------------------------
-# 7. LEGENDA EXPLICATIVA DAS CORES
-# ---------------------------------------------------------
-st.markdown("""
-<div class="legend-box">
-    <div class="legend-title">Legenda das LTS</div>
-    <div class="legend-items">
-        <div class="legend-item">
-            <span class="dot" style="background-color: #38bdf8; border: 2px solid #0369a1;"></span>
-            <span>LTS TÉRREO</span>
-        </div>
-        <div class="legend-item">
-            <span class="dot" style="background-color: #1d4ed8; border: 2px solid #1e3a8a;"></span>
-            <span>LTS 2°ANDAR</span>
-        </div>
-        <div class="legend-item">
-            <span class="dot" style="background-color: #f59e0b; border: 2px solid #b45309;"></span>
-            <span>LTS AÉREO</span>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+st_folium(mapa, width="100%", height=350)
