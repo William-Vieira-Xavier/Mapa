@@ -391,7 +391,7 @@ mapa = folium.Map(
 if user_lat is not None and user_lon is not None:
     folium.Marker(
         location=[user_lat, user_lon],
-        popup="<b>Sua Posição (Operador)</b>",
+        popup="<b>Sua Posição (PSF)</b>",
         tooltip="Você está aqui",
         icon=folium.Icon(color="red", icon="user", prefix="fa")
     ).add_to(mapa)
@@ -523,4 +523,4 @@ if not df_lts.empty:
 # ---------------------------------------------------------
 # 7. RENDERIZAÇÃO DO MAPA
 # ---------------------------------------------------------
-st_folium(mapa, width="100%", height=350)
+st_folium(mapa, width="100%", height=400)
