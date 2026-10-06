@@ -4,6 +4,7 @@ import folium
 from streamlit_folium import st_folium
 from streamlit_js_eval import get_geolocation
 import os
+import re
 import time
 
 # ---------------------------------------------------------
@@ -251,6 +252,66 @@ def converter_coordenada(valor):
     except ValueError:
         return None
 
+def normalizar_ip(valor):
+    if pd.isna(valor):
+        return None
+
+    texto = str(valor).strip()
+    if not texto:
+        return None
+
+    texto = texto.replace(' ', '').replace(',', '.').replace(';', '.').replace('/', '.').replace('-', '.').replace('_', '.')
+    texto = re.sub(r'[^\d.]', '', texto)
+    texto = re.sub(r'\.+', '.', texto).strip('.')
+
+    if not texto:
+        return None
+
+    if '.' in texto:
+        partes = [p for p in texto.split('.') if p]
+        if len(partes) == 4:
+            try:
+                octetos = [int(p) for p in partes]
+            except ValueError:
+                pass
+            else:
+                if all(0 <= octeto <= 255 for octeto in octetos):
+                    return f"{octetos[0]:02d}.{octetos[1]:03d}.{octetos[2]:03d}.{octetos[3]:03d}"
+
+    digitos = re.sub(r'\D', '', texto)
+    if not digitos:
+        return texto
+
+    padroes = [
+        (2, 3, 3, 2),
+        (2, 3, 3, 3),
+        (3, 3, 3, 3),
+        (1, 3, 3, 3),
+        (2, 2, 3, 3),
+        (2, 3, 2, 3),
+    ]
+
+    for padrao in padroes:
+        if sum(padrao) != len(digitos):
+            continue
+
+        try:
+            octetos = []
+            pos = 0
+            for tamanho in padrao:
+                octetos.append(int(digitos[pos:pos + tamanho]))
+                pos += tamanho
+        except ValueError:
+            continue
+
+        if all(0 <= octeto <= 255 for octeto in octetos):
+            return '.'.join(
+                f"{octetos[0]:02d}" if i == 0 else f"{octetos[i]:03d}"
+                for i in range(len(octetos))
+            )
+
+    return texto
+
 df_lts = pd.DataFrame()
 
 try:
@@ -262,6 +323,8 @@ except Exception as e:
     st.stop()
 
 colunas_switches = [col for col in df_lts.columns if 'SWITCH' in col]
+for col in colunas_switches:
+    df_lts[col] = df_lts[col].apply(normalizar_ip)
 
 # ---------------------------------------------------------
 # 2. CAPTURA DE GEOLOCALIZAÇÃO DO CELULAR
@@ -314,7 +377,7 @@ if not df_lts.empty:
             val_sw = r.get(col_sw)
             if pd.notna(val_sw) and str(val_sw).strip():
                 nome_sw = col_sw.replace(" - IP", "").replace("_", " ")
-                ip_sw = str(val_sw).strip()
+                ip_sw = normalizar_ip(val_sw)
                 label_sw = f"{ip_sw} ({nome_sw} - {nome_lts})"
                 mapa_switches[label_sw] = r
 
@@ -445,10 +508,11 @@ if not df_lts.empty:
             val_sw = row.get(col_sw)
             if pd.notna(val_sw) and str(val_sw).strip():
                 nome_limpo = col_sw.replace(" - IP", "").replace("_", " ")
+                ip_formatado = normalizar_ip(val_sw)
                 switches_encontrados.append(f"""
                     <div style="background: #1e293b; border: 1px solid #334155; border-left: 3px solid {cor_preenchimento}; padding: 3px 6px; border-radius: 4px; margin-bottom: 3px;">
                         <span style="color: #94a3b8; font-size: 9px; font-weight: bold; display: block; text-transform: uppercase;">{nome_limpo}</span>
-                        <code style="color: #38bdf8; font-size: 10px; font-weight: bold; font-family: monospace;">{str(val_sw).strip()}</code>
+                        <code style="color: #38bdf8; font-size: 10px; font-weight: bold; font-family: monospace;">{ip_formatado}</code>
                     </div>
                 """)
 
